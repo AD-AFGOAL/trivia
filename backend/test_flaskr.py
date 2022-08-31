@@ -132,7 +132,7 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data['message'], 'resource not found')
         self.assertEqual(data['success'], False)
 
-    #test play_quizz
+    #test play_quizzes
     def test_play_quiz(self):
         new_quiz = {'previous_questions': [],
                             'quiz_category': {'type': 'Entertainment', 'id': 2}}

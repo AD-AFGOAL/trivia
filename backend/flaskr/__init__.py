@@ -19,14 +19,6 @@ def paginate_questions(request, selection):
     current_questions = questions[start:end]
     return current_questions
 
-def paginate_categories(request, selection):
-    page = request.args.get('page', 1, type=int)
-    start = (page - 1) * CATEGORIES_PER_PAGE
-    end = start + CATEGORIES_PER_PAGE
-    categories = [Category.format() for Category in selection]
-    current_category = categories[start:end]
-    return current_category
-
 def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
@@ -56,16 +48,21 @@ def create_app(test_config=None):
     @app.route('/categories', methods=['GET'])
     def get_categories():
         selection = Category.query.order_by(Category.id).all()
-        current_category = paginate_categories(request, selection)
 
-        if len(current_category) == 0:
+        if len(selection) == 0:
             abort(404)
 
+        categories = [category.format() for category in selection]
+        
+        selection = {}
+        
+        for category in categories:
+            selection[category['id']] = category['type']
+            
         return jsonify({
-                'success': True,
-                'categories': current_category,
-                'totals_categories': len(Category.query.all())
-            })
+            "success": True,
+            "categories": selection
+        })
 
     """
     @TODO:
@@ -141,21 +138,18 @@ def create_app(test_config=None):
     @app.route('/questions/create', methods=['POST'])
     def new_question():
         body = request.get_json()
-        new_question = body.get('question', None)
-        new_answer = body.get('answer', None)
-        new_category = body.get('category', None)
-        new_difficulty = body.get('difficulty', None)
+        question = body.get('question', None)
+        answer = body.get('answer', None)
+        category = body.get('category', None)
+        difficulty = body.get('difficulty', None)
         try:
-            question = Question(question=new_question, answer=new_answer,
-                                category=new_category, difficulty=new_difficulty)
-            question.insert()
-            selection = Question.query.order_by(Question.id).all()
-            current_questions = paginate_questions(request, selection)
+            new_question = Question(question=question, answer=answer,
+                                category=category, difficulty=difficulty)
+            new_question.insert()
+
             return jsonify({
                 "success": True,
-                "created": question.id,
-                "questions": current_questions,
-                "total_questions": len(Question.query.all())
+                "created": new_question.id,
             })
         except:
             abort(422)
@@ -173,18 +167,21 @@ def create_app(test_config=None):
     @app.route('/questions', methods=['POST'])
     def search_term_questions():
         body = request.get_json()
-        search = body.get('search', None)
+        search_term = body.get('search_term', None)
 
-        if search:
-            questions = Question.query.order_by(Question.id).filter(
-                Question.category.ilike('%{}%'.format(search)))
-            current_questions = paginate_questions(request, questions)
-            return jsonify({
-                'success': True,
-                'questions': current_questions,
-                'totals_questions': len(questions)
-            })
-
+        if 'search_term' in body:
+                if search_term == "":
+                    abort(422)
+                
+                results = Question.query.order_by(Question.id).filter(Question.question.ilike("%" + search_term + "%")).all()
+                
+                data = [result.format() for result in results]
+                
+                return jsonify({
+                    "success": True,
+                    "questions": data,
+                    "total_questions": len(data)
+                })
     """
     @TODO:
     Create a GET endpoint to get questions based on category.
@@ -225,32 +222,44 @@ def create_app(test_config=None):
     one question at a time is displayed, the user is allowed to answer
     and shown whether they were correct or not.
     """
-    @app.route('/quizz', methods=['POST'])
-    def play_quiz_questions():
-
+    @app.route('/quizzes', methods=['POST'])
+    def play_quizz():
         try:
             body = request.get_json()
-            previous_questions = body.get('previous_questions', None)
-            category = body.get('quiz_category', None)
-
-            category_id = category['id']
-            pass_next_question = None
             
-            if category_id is not None:
-                get_questions = Question.query.filter_by(category=category_id).filter(Question.id.notin_((previous_questions))).all()    
+            previous_questions = body.get('previous_questions')
+            quizz_category = body.get('quiz_category')
+            
+            if 'previous_questions' not in body and 'quiz_category' not in body:
+                abort(422)
+            
+            if  quizz_category['id'] != 0 and quizz_category['type'] != "click":
+                
+                categorie = Category.query.get(quizz_category['id'])
+                
+                if categorie is None:
+                    abort(422)
+                    
+                all_questions = Question.query.filter_by(category=quizz_category['id']).filter(Question.id.not_in(previous_questions)).all()
+                data = [question.format() for question in all_questions]
+                question = random.choice(data) if len(data) != 0 else None
+                return jsonify({
+                    "success": True,
+                    "question": question
+                })
+                
             else:
-                get_questions = Question.query.filter(Question.id.notin_((previous_questions))).all()
+                all_questions = Question.query.filter(Question.id.not_in(previous_questions)).all()
+                data = [question.format() for question in all_questions]
+                question = random.choice(data) if len(data) != 0 else None
+                
+                return jsonify({
+                    "success": True,
+                    "question": question
+                })
             
-            if len(get_questions) > 0:
-                pass_next_question = random.choice(get_questions).format()
-            
-            return jsonify({
-                'question': pass_next_question,
-                'success': True,
-            })
         except:
             abort(422)
-
     """
     @TODO:
     Create error handlers for all expected errors
