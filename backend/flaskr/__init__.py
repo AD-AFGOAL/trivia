@@ -1,13 +1,15 @@
+from ast import Str
 import os
+from tokenize import String
 from flask import Flask, request, abort, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import random
 
-from models import setup_db, Question, Category, db
+from flaskr.models import setup_db, Question, Category, db
 
 QUESTIONS_PER_PAGE = 10
-
+CATEGORIES_PER_PAGE = 10
 
 def paginate_questions(request, selection):
     page = request.args.get('page', 1, type=int)
@@ -17,11 +19,18 @@ def paginate_questions(request, selection):
     current_questions = questions[start:end]
     return current_questions
 
+def paginate_categories(request, selection):
+    page = request.args.get('page', 1, type=int)
+    start = (page - 1) * CATEGORIES_PER_PAGE
+    end = start + CATEGORIES_PER_PAGE
+    categories = [Category.format() for Category in selection]
+    current_category = categories[start:end]
+    return current_category
 
 def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
-    app.config.from_pyfile(test_config)
+    app.config.from_object(test_config)
     db.init_app(app)
     setup_db(app)
 
@@ -44,17 +53,17 @@ def create_app(test_config=None):
     Create an endpoint to handle GET requests
     for all available categories.
     """
-    @app.route('/categories')
+    @app.route('/categories', methods=['GET'])
     def get_categories():
-        categories = Category.query.all()
-        current_categories = paginate_questions(request, categories)
-        if len(current_categories) == 0:
+        selection = Category.query.order_by(Category.id).all()
+        current_category = paginate_categories(request, selection)
+
+        if len(current_category) == 0:
             abort(404)
-        else:
-            formatted_categories = current_categories
-            return jsonify({
+
+        return jsonify({
                 'success': True,
-                'categories': formatted_categories,
+                'categories': current_category,
                 'totals_categories': len(Category.query.all())
             })
 
@@ -71,7 +80,7 @@ def create_app(test_config=None):
     Clicking on the page numbers should update the questions.
     """
     @app.route('/questions', methods=['GET'])
-    def paginate_questions(request, selection):
+    def get_questions():
         try:
             selection = Question.query.order_by(Question.id).all()
             current_questions = paginate_questions(request, selection)
@@ -105,8 +114,7 @@ def create_app(test_config=None):
     @app.route('/questions/<int:question_id>', methods=['DELETE'])
     def delete_question(question_id):
         try:
-            question = Question.query.filter(
-                Question.id == question_id).delete()
+            question = Question.query.filter_by(id=question_id).one_or_none()
             if question is None:
                 abort(404)
             question.delete()
@@ -248,7 +256,7 @@ def create_app(test_config=None):
     Create error handlers for all expected errors
     including 404 and 422.
     """
-    @app.error_handler(400)
+    @app.errorhandler(400)
     def bad_Request(error):
         return (jsonify({
             'success': False,
@@ -256,7 +264,7 @@ def create_app(test_config=None):
             'message': 'bad Request'
         }), 400)
 
-    @app.error_handler(404)
+    @app.errorhandler(404)
     def not_found(error):
         return (jsonify({
             'success': False,
@@ -272,7 +280,7 @@ def create_app(test_config=None):
             'message': 'method not allowed'
         }), 405)
 
-    @app.error_handler(422)
+    @app.errorhandler(422)
     def Unprocessable(error):
         return (jsonify({
             'success': False,
@@ -280,7 +288,7 @@ def create_app(test_config=None):
             'message': 'Unprocessable Entity'
         }), 422)
 
-    @app.error_handler(500)
+    @app.errorhandler(500)
     def Server_Error(error):
         return (jsonify({
             'success': False,

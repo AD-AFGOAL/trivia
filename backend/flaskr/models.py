@@ -1,12 +1,14 @@
 import os
 from sqlalchemy import Column, String, Integer, create_engine
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 import json
 
 database_name = 'trivia'
 database_path = 'postgresql://{}:{}@{}/{}'.format('postgres', '1516', 'localhost:5432', database_name)
 
 db = SQLAlchemy()
+
 
 
 """
@@ -19,8 +21,6 @@ def setup_db(app, database_path=database_path):
     db.app = app
     db.init_app(app)
     db.create_all()
-
-
 """
 Question
 
